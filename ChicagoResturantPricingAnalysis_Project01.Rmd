@@ -1,0 +1,736 @@
+---
+title: "Chicago Restaurant Pricing Analysis Project "
+author: "Isha Singh"
+date: '2024-10-27'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r image_for_title, echo=FALSE,out.width= "50%",fig.align='center'}
+knitr::include_graphics("//Users/isingh/Desktop/picturetakenbyme.jpg")
+
+```
+      (image taken by Isha Singh)
+
+## SECTION 01: INTRODUCTION
+The Chicago restaurant pricing dataset consists of approximately 1,500 observations of restaurants within the Chicago area. Each observation includes the restaurant’s name, distance from a central location (Northwestern downtown campus) in miles, the price of a meal, the price of a drink, and the category or cuisine of the restaurant (American, Indian, Mexican, etc.). For the purpose of improved analysis, the collected data was also modified to incorporate the following: a 12 percent tax, the total cost of the meal including transportation, and a ratio of the price of the food to the total cost.
+
+There are various types of parameters within the dataset, which further contribute to explaining the analysis. The dataset contains numerical variables for pricing and distance to the central location, as well as categorical variables (different cuisines). Since numerical variables contribute to understanding pricing trends across various cuisines and their distances, they are very important. The initial descriptive analysis provides information on the skewness and variability in the price distribution by cuisine, ranging from inexpensive to expensive categories. In order to gain a better understanding of the factors influencing the Chicago area, the analysis aims to emphasize the variables.
+
+## PRE - PROCESSING SECTION 
+
+```{r preprocessing 01, message=FALSE,echo=FALSE }
+library(ggplot2)
+library(gridExtra)
+library(psych)
+library(knitr)
+library(moments)
+observations <- read.csv("/Users/isingh/Desktop/observations_chicago.csv", 
+                         check.names = TRUE)
+```
+STRUCTURE OF THE DATA FRAME
+```{r structureOfObservations, message=FALSE,echo=FALSE,results='show'}
+str(observations)
+```
+PRE_PROCESSING OF NEW FEATURES
+```{r calculationOfNewVariables, message=FALSE,echo=TRUE}
+#FoodPrice by adding the Meal Price and the Drink Price 
+# and adding a 12% tax for the total.
+observations$FoodPrice <- (observations$Price_of_Meal +
+                             observations$Price_of_Drink) * 1.12
+
+# (e) TT_Price the total price of a meal, considering the 
+# transportation as well,use 3.5 dollars per mile when the distance is longer than 1 mile.
+observations$TT_Price <- ifelse(observations$Distance > 1, 
+                                observations$FoodPrice + 
+                                  (observations$Distance * 3.5), 
+                                observations$FoodPrice)
+
+# Status, the status of the restaurant categorizing it as
+# inexpensive when the FoodPrice is less or equal to 10 dollars, 
+# Normal for a price more than 10 but less than 20 dollars and 
+#Expensive if the FoodPrice is higher than 20 dollars. Change this variable to a factor.
+observations$Status <- ifelse(observations$FoodPrice <= 10, "Inexpensive",
+                      ifelse(observations$FoodPrice
+                             >= 20, "Expensive", "Normal"))
+
+# Convert Status to a factor
+observations$Status <- as.factor(observations$Status)
+
+# Calculate the Ratio of FoodPrice to TT_Price
+observations$Ratio <- observations$FoodPrice / observations$TT_Price
+```
+## SECTION 01A: SUMMARIZING THE DATA 
+
+(1)(a) **(1 point)** Use summary() to obtain and present descriptive statistics from mydata. Use table() to present a frequency table using Category and Status.
+\clearpage
+
+```{r descriptivestatistics_and_frequencyTables, echo=FALSE, message=FALSE}
+library(knitr)
+library(kableExtra)
+
+# Descriptive Statistics 
+numeric_stats <- summary(observations[, sapply(observations, is.numeric)])
+
+kable(numeric_stats, caption = "Descriptive Statistics") %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F, font_size = 9, 
+                latex_options = "hold_position") %>%
+  column_spec(1, bold = TRUE)
+
+cat("\n") 
+
+# Frequency Table using Category and Status
+frequency_table <- table(observations$Category, observations$Status)
+
+kable(frequency_table, caption = "Frequency Table: Category vs. Status") %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F, font_size = 9, 
+                latex_options = "hold_position") %>%
+  column_spec(1, bold = TRUE)
+```
+\vspace{10pt}  
+
+***Question (1 point):  Briefly discuss the variable types and distributional implications such as potential skewness and outliers.***
+
+
+The categorical variables in the dataset are Category and Status for the pricing level. The numerical variables consist of Distance, Meal Price, Drink Price, Food Price, Total Transportation Price, and Ratio of Food Price to Total Cost. Among these numerical variables, the meal price and total transportation price show right skewness as the mean is shown to be higher than the median. In regard to the meal price in detail, the mean is $8.051, while the median is $7.96, which indicates a right skew due to high-priced meals. Similarly, the total transportation price has a mean of $29.03 and a median of $28.60, with values approaching a maximum of $123.89, possibly due to restaurants located farther from the Northwestern downtown campus, causing high transportation costs. The high-cost outliers—meal price at $56 and distance being 18 miles—pull the mean in an upward direction, which causes variability within the dataset. We can see the spread shows nearby restaurants that are inexpensive, expensive, and in the middle, with different types of cuisines.
+
+
+
+
+\vspace{10pt}  
+
+
+(1)(b) **(2 point)** Generate a table of counts using Category and Status. Add margins to this table. Lastly, present a barplot of these data; ignoring the marginal totals.
+
+```{r category_status_counts, echo=FALSE, fig.width=8, fig.height=5.4}
+# (1)(b) Generate table of counts using Category and Status
+category_status_table <- table(observations$Category, observations$Status)
+
+category_status_with_margins <- addmargins(category_status_table)
+kable(category_status_with_margins, caption = "Category and Status") %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F, font_size = 9)
+status_colors <- c("steelblue", "coral3", "darkolivegreen3", "mediumpurple3", 
+                   "tan2", "firebrick3", "lightseagreen", "khaki3", "plum3",
+                   "orchid3", "deepskyblue4", "tomato3", "goldenrod2", "dodgerblue3", "lightpink3")
+
+# Barplot for Category and Status 
+bar_positions <- barplot(category_status_table, beside = TRUE, 
+                         col = status_colors,  
+                         main = "Status of Cuisines",
+                         xlab = "Status", 
+                         ylab = "Count", 
+                         legend = rownames(category_status_table),
+                         args.legend = list(title = "Categories", x = "topright", inset = c(0.02, 0), cex = 0.6, ncol = 2))
+
+text(bar_positions, category_status_table + 5, labels = category_status_table, cex = 0.7, col = "black")
+
+text(bar_positions[3, 1], category_status_table[1, 3] + 25, labels = category_status_table[1, 3], cex = 0.7, col = "black")
+```
+\vspace{10pt}  
+(1)(c) **(1 point)** Generate a table of counts using only Category. Present a barplot of these data, add a legend.
+
+```{r category_only_counts, echo=FALSE, fig.width=8, fig.height=7}
+# (1)(c) Generate table of counts using only Category
+category_table <- table(observations$Category)
+
+category_df <- as.data.frame(category_table)
+colnames(category_df) <- c("Category", "Count")
+
+kable(category_df, caption = "Category Counts") %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F, font_size = 9)
+
+category_colors <- c("steelblue", "coral3", "darkolivegreen3", "mediumpurple3", 
+                     "tan2", "firebrick3", "lightseagreen", "khaki3", "plum3",
+                     "orchid3", "deepskyblue4", "tomato3", "goldenrod2", "dodgerblue3", "lightpink3")
+
+par(mar = c(8, 4, 4, 2) + 0.1)  
+
+bar_positions <- barplot(category_table, 
+                         col = category_colors, 
+                         main = "Counts by Category",  
+                         xlab = "",  
+                         ylab = "Count", 
+                         legend = names(category_table),  
+                         args.legend = list(title = "Categories", x = "topright", inset = c(0.02, 0), cex = 0.5),
+                         las = 2,      
+                         cex.names = 0.8,  
+                         cex.axis = 0.8)   
+
+mtext("Category", side = 1, line = 6, cex = 0.9)  
+
+text(bar_positions, category_table + 5, labels = category_table, cex = 0.7, col = "black")
+
+par(mar = c(5, 4, 4, 2) + 0.1) 
+```
+
+***Essay Question **(2 points)**:  Discuss the Category distribution of restaurants first, what do you observe? Was that expected? What stands out about the distribution of restaurants by Status if any?***
+
+The category of the different cuisines of the restaurants shows a significant variation in the number of restaurants. There is the highest count of American restaurants at 302, followed by Mexican cuisine (161), Italian (130), and Thai (122). The trend overall shows Chicagoans’ preferences or, in a way, the availability of different types of cuisines in a particular area according to distance. Spanish (53), Brazilian (65), and Peruvian (56) are among the cuisines with comparatively lower counts, suggesting that their availability is restricted. This indicates that Mexican food is very popular in the area around Northwestern Chicago.
+
+One can gain a better sense of pricing levels by looking at the status distribution for each cuisine group. For instance, many restaurants serve American, Mexican, and Italian cuisines in a variety of pricing ranges (expensive, normal, and low), so people of all income levels can eat at the restaurant of their choice. Additionally, the more affordable options and limited price range of Peruvian and Brazilian cuisines suggest that their costs are more affordable. After consideration, the presence of multiple pricing points indicates a variety of restaurants catering to different income levels.
+
+\vspace{20pt}  
+
+
+(1)(d) **(3 point)** Select a simple random sample of 200 observations from "mydata" and identify this sample as "work." Use *set.seed(123)* prior to drawing this sample. Do not change the number 123. Note that *sample()* "takes a sample of the specified size from the elements of x." Using "work", construct a scatterplot matrix of variables 2-5 with *plot(work[, 2:5])* 
+\vspace{6pt}  
+
+```{r random_sample_work_and_plot_matrix_final, echo=FALSE, fig.width=7, fig.height=5.4}
+set.seed(123)
+sample_indices <- sample(1:nrow(observations), size = 200)
+work <- observations[sample_indices, ]
+plot(work[, 2:5], 
+     main = "Scatterplot Matrix: Distance, Meal Price, Drink Price, and Food Price", 
+     col = "darkblue",  
+     pch = 19,
+     cex= 0.4)
+```
+
+\vspace{10pt}
+
+## SECTION 02: SUMMARIZING THE DATA USING GRAPHICS
+(2)(a) **(1 point)** Use "observations" to plot FoodPrice versus Distance. Color code data points by Status.
+
+```{r foodprice_vs_distance_colored_by_status, echo=FALSE, fig.width=6, fig.height=4}
+status_colors <- c("Inexpensive" = "lightblue", "Normal" = "lightgreen", "Expensive" = "orange")
+
+plot(observations$Distance, observations$FoodPrice, 
+     col = status_colors[observations$Status], 
+     pch = 19,  
+     xlab = "Distance", 
+     ylab = "Food Price", 
+     main = "Food Price vs Distance by Status")
+
+legend("topright", legend = names(status_colors), 
+       col = status_colors, pch = 19, cex=0.521,title = "Status")
+```
+\vspace{10pt}
+
+
+
+***Essay Question **(3 points)**:  Are there outliers? Are the outliers for all statuses or specific ones, can you explain the reason that these outliers are present?***
+
+\vspace{3pt}
+
+The scatterplot of the price of food vs. distance, specific to status, reveals distinct outliers, particularly within the “Normal” status category, with a few instances in the “Inexpensive” category as well. The outliers appear as data points above $60, with some reaching just over $80. The high food prices are due to restaurants located farther from Streeterville or the Northwestern downtown campus, which results in additional transportation costs, thereby increasing the total cost. Moreover, the outliers are not evenly distributed across all status categories. They appear mainly in the “Normal,” “Inexpensive,” and “Expensive” categories, which indicates a wide range in pricing even for restaurants considered “normal” and “inexpensive” or “expensive” based on their cuisine. The variability reflects the different types of cuisines and their categories, based on lower-priced to high-cost meals. The presence of these outliers highlights a range of restaurant options, from affordable to high-end dining experiences, within similar status categories.
+
+\vspace{10pt}
+
+(2)(b) **(3 points)** Use "observations" to research the variables TT_Price, FoodPrice, and Distance. Run histograms for all variables and identify the distribution they follow. Discuss Skewness for any of those. To further understand the FoodPrice, drill further in researching on the components of Meal and Drink Price. Use histograms and boxplots for this investigation. ( Free form analysis), that will help you to form conclusions.
+
+
+```{r research_ttprice_foodprice_distance_histograms, echo=FALSE, fig.width=10, fig.height=7}
+par(mfrow = c(1, 3), mar = c(5, 6, 5, 2) + 0.1)  
+
+hist_tt_price <- hist(observations$TT_Price, 
+                      main = "Total Transportation Price", 
+                      xlab = "Total Price", 
+                      col = "lightsteelblue",  
+                      border = "black",
+                      cex.main = 1.5,         
+                      cex.axis = 1.1,        
+                      cex.lab = 1.2)          
+
+text(hist_tt_price$mids, hist_tt_price$counts, labels = hist_tt_price$counts, pos = 3, cex = 1)
+
+hist_food_price <- hist(observations$FoodPrice, 
+                        main = "Food Price", 
+                        xlab = "Food Price", 
+                        col = "lightgoldenrod",  
+                        border = "black",
+                        cex.main = 1.5,         
+                        cex.axis = 1.1,        
+                        cex.lab = 1.2)         
+
+text(hist_food_price$mids, hist_food_price$counts, labels = hist_food_price$counts, pos = 3, cex = 1)
+
+hist_distance <- hist(observations$Distance, 
+                      main = "Distance", 
+                      xlab = "Distance", 
+                      col = "lightpink",       
+                      border = "black",
+                      cex.main = 1.5,          
+                      cex.axis = 1.1,          
+                      cex.lab = 1.2)           
+
+text(hist_distance$mids, hist_distance$counts, labels = hist_distance$counts, pos = 3, cex = 1)
+
+par(mfrow = c(1, 1))
+```
+\vspace{10pt}
+
+
+***Essay Question **(3 points)**:  Do the variables or any specific follows normal distribution? Is there any of the simple variables skewed and how they affect the distribution of Food Price and or the TT_Price? How does the variability in them compare with each other? ***
+
+As distance increases, we see clear trends in food costs, travel expenses, and the total price of dining out. Most rates stay under $40, but a few places go up to $120. This shows a strong right skew in overall costs, meaning that restaurants farther from Northwestern’s downtown campus have higher travel expenses, while closer spots keep transportation costs lower.
+
+The histogram of food prices also demonstrates a right-skewed distribution with the majority of prices falling below $20, suggesting that as the meal becomes more premium, there are some more expensive options. This is relevant to the second necessary component to consider. In order to have a better understanding of the food price variable, we concentrate on the price of meals and beverages. This demonstrates that a few high-priced meals and drinks raise the total cost of food.
+
+
+Finally, with distance, we observe a right-skewed distribution, just like the other features.It is evident from this that most restaurants are located near the university. Overall, the transportation and food costs appear to skew to the right, indicating that there are a wide variety of options, from affordable to expensive, and that getting to the dining scene is usually straightforward.
+
+## SECTION 03: GETTING INSIGHTS ABOUT THE DATA USING GRAPHS
+
+(3)(a) **(5 points)** Use "observations" to create a multi-figured plot with histograms, boxplots and Q-Q plots of Ratio differentiated by Status. This can be done using *par(mfrow = c(3,3))* and base R or *grid.arrange()* and ggplot2. The first row would show the histograms, the second row the boxplots and the third row the Q-Q plots. Be sure these displays are legible.  
+
+```{r multi_figure_plots_ratio_bystatus, echo=FALSE, fig.width=10, fig.height=8}
+
+par(mfrow = c(3, 3))
+
+# Define colors for each status
+inexpensive_color <- "lightblue"
+normal_color <- "lightgreen"
+expensive_color <- "orange"
+
+# --- First row: Histograms ---
+# Inexpensive
+hist(observations$Ratio[observations$Status == "Inexpensive"], 
+     main = "Histogram of RATIO (Inexpensive)", 
+     xlab = "RATIO", 
+     col = inexpensive_color, 
+     border = "black", 
+     cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+
+# Normal
+hist(observations$Ratio[observations$Status == "Normal"], 
+     main = "Histogram of RATIO (Normal)", 
+     xlab = "RATIO", 
+     col = normal_color, 
+     border = "black", 
+     cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+
+# Expensive
+hist(observations$Ratio[observations$Status == "Expensive"], 
+     main = "Histogram of RATIO (Expensive)", 
+     xlab = "RATIO", 
+     col = expensive_color, 
+     border = "black", 
+     cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+
+# --- Second row: Boxplots ---
+# Inexpensive
+boxplot(observations$Ratio[observations$Status == "Inexpensive"], 
+        main = "Boxplot of RATIO (Inexpensive)", 
+        col = inexpensive_color, 
+        ylab = "RATIO", 
+        cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+
+# Normal
+boxplot(observations$Ratio[observations$Status == "Normal"], 
+        main = "Boxplot of RATIO (Normal)", 
+        col = normal_color, 
+        ylab = "RATIO", 
+        cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+
+# Expensive
+boxplot(observations$Ratio[observations$Status == "Expensive"], 
+        main = "Boxplot of RATIO (Expensive)", 
+        col = expensive_color, 
+        ylab = "RATIO", 
+        cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+
+# --- Third row: Q-Q plots ---
+# Inexpensive
+qqnorm(observations$Ratio[observations$Status == "Inexpensive"], 
+       main = "Q-Q Plot (Inexpensive)", 
+       ylab = "Sample Quantiles", 
+       cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+qqline(observations$Ratio[observations$Status == "Inexpensive"], col = "red")
+
+# Normal
+qqnorm(observations$Ratio[observations$Status == "Normal"], 
+       main = "Q-Q Plot (Normal)", 
+       ylab = "Sample Quantiles", 
+       cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+qqline(observations$Ratio[observations$Status == "Normal"], col = "red")
+
+# Expensive
+qqnorm(observations$Ratio[observations$Status == "Expensive"], 
+       main = "Q-Q Plot (Expensive)", 
+       ylab = "Sample Quantiles", 
+       cex.main = 1.2, cex.lab = 1, cex.axis = 1)
+qqline(observations$Ratio[observations$Status == "Expensive"], col = "red")
+
+par(mfrow = c(1, 1))
+```
+
+\vspace{10pt}
+\clearpage
+
+(3)(b) **(5 points)** Repeat the process for the step 3a but now replace the Status with Category. 
+
+```{r multi_figure_plots_ratio_bycategory, echo=FALSE, fig.width=10, fig.height=8}
+# Set up multi-page layout with 12 plots per page (4x3 grid)
+par(mfrow = c(4, 3), mar = c(4, 4, 2, 1))
+
+category_colors <- c("American" = "steelblue", "Brazilian" = "coral3", "Chinese" = "darkolivegreen3", 
+                     "French" = "mediumpurple3", "German" = "tan2", "Indian" = "firebrick3", 
+                     "Italian" = "lightseagreen", "Japanese" = "khaki3", "Korean" = "plum3", 
+                     "Mediterranean" = "orchid3", "Mexican" = "deepskyblue4", "Peruvian" = "tomato3", 
+                     "Spanish" = "goldenrod2", "Thai" = "dodgerblue3", "Vietnamese" = "lightpink3")
+
+unique_categories <- unique(observations$Category)
+
+for (i in seq_along(unique_categories)) {
+  category <- unique_categories[i]
+  color <- category_colors[category]
+
+  # --- First row: Histogram for the current Category ---
+  hist(observations$Ratio[observations$Category == category], 
+       main = paste("Histogram of RATIO (", category, ")", sep = ""), 
+       xlab = "RATIO", 
+       col = color, 
+       border = "black", 
+       cex.main = 0.9, cex.lab = 0.8, cex.axis = 0.8)
+
+  # --- Second row: Boxplot for the current Category ---
+  boxplot(observations$Ratio[observations$Category == category], 
+          main = paste("Boxplot of RATIO (", category, ")", sep = ""), 
+          col = color, 
+          ylab = "RATIO", 
+          cex.main = 0.9, cex.lab = 0.8, cex.axis = 0.8)
+
+  # --- Third row: Q-Q plot for the current Category ---
+  qqnorm(observations$Ratio[observations$Category == category], 
+         main = paste("Q-Q Plot (", category, ")", sep = ""), 
+         ylab = "Sample Quantiles", 
+         cex.main = 0.9, cex.lab = 0.8, cex.axis = 0.8)
+  qqline(observations$Ratio[observations$Category == category], col = "red")
+
+  if ((i %% 12) == 0) {
+    par(mfrow = c(4, 3)) 
+    cat(" ") 
+  }
+}
+
+par(mfrow = c(1, 1))
+```
+
+***Essay Question **(5 points)**: Compare the displays.How do the distributions compare to normality? Take into account the criteria discussed to evaluate non-normality.***
+
+COMPARISION OF STATUS 
+\vspace{3pt}
+
+The multi-figured plot created to understand the Status Ratio shows a distinctive pattern. Beginning with the Inexpensive category, the histogram is right-skewed, with most values clustering between 0.3 and 0.6. This indicates that inexpensive restaurants typically offer affordable meal prices relative to the total cost, which includes lower food prices and/or transportation costs.
+Near the 1.0 ratio, there is an outlier that points to the existence of more affordable restaurants. In the Normal category, the more uniform distribution covers a wider range of 0.3 to 1.0. The distribution is right-skewed, and there are further variations in the ratio of food to total transportation costs indicating major variations in meal costs. 
+
+The outliers that we see above the 0.9 threshold are caused by exceptionally high total prices, most likely from premium locations. Finally, the distribution falls between 0.5 and 0.9 in the Expensive category, with outliers at each extreme. There are a few outliers that indicate upscale restaurants with low ratios that are both near 1.0 and below 0.5. 
+
+
+This suggests that these restaurants are either very close to the university or follow a distinct pricing strategy, such as a fine dining experience. The boxplots tell a better and more emphasized story. The inexpensive boxplot shows a compact distribution with a range from approximately 0.3 to 0.6, which reinforces the histogram’s understanding of inexpensive restaurants maintaining lower ratios. Outliers in the normal status exceed the 0.9 threshold, and the interquartile range is larger (~0.25). These outliers probably represent areas with high expenditures generally because of either premium costs or farther locations. Finally, the costly status shows a wide range of values between about 0.5 and 0.7, with some outliers at 0.9 and above and a few below 0.5. This distribution suggests that some expensive restaurants have incredibly high or low ratios, which may be due to their proximity to the institution or a combination of their fine dining experiences and/or unique pricing strategies.
+\vspace{4pt}
+
+COMPARISION OF CATEGORY 
+\vspace{3pt}
+
+For the variable Ratio (Food Price / Total Transportation Price), each of the 15 distinct cuisine groups has distinct distribution features, showing a range of normal and non-normal tendencies and highlighting the influence of outliers. A more symmetric distribution is seen in the Mexican and American cuisines, with central values ranging from 0.5 to 0.7. In contrast, the frequencies of Chinese and Mediterranean cuisines are greater, ranging from 0.3 to 0.6, and they exhibit a tilt towards the right. This implies lower ratios because Chinese and Mediterranean restaurants typically have cheaper meal prices or transportation expenses.
+
+To further demonstrate the ratio of food price to total transportation cost, the boxplots above show different trends among cuisines. Restaurants based on cuisines of Mexico, Italy, and the United States had more outliers and a wider interquartile range. For example, outliers in the Mexican food category are close to 1.0, meaning that businesses with higher ratios either provide more expensive food or are farther away from Northwestern's central campus. Additionally, the boxplots for Chinese and Mediterranean cuisines are more compressed, suggesting less variability and a more consistent pricing pattern. However, even in these more stable categories, there are periodic outliers above 0.8, which may be the result of the expensive setting or unique ambiance of the restaurant.
+
+The Q-Q figure illustrates how normalcy levels vary. The American and Mexican categories follow the line more closely and exhibit a more symmetric distribution, with occasional tail fluctuations. However, the Chinese, Thai, and Vietnamese groups show substantial deviations from the normal line for ratios below 0.6, indicating severe non-normality and right skewness. This is due to outliers that extends the higher tail in categories like Mexican and more affordable meals and transportation in these categories.
+\vspace{4pt}
+
+OVERALL COMPARISION OF STATUS AND CATEGORY 
+\vspace{3pt}
+
+The data additionally shows how location and the wide variety of methods of pricing influence different cuisine groups, including Mexican and American. Overall, our analysis illustrates how pricing structures and location effects differ significantly across various types of cuisine groups, with some expensive outliers that exist with more affordable options like Chinese and Mediterranean and popular options like American.
+
+In order to compare the ratio distributions with status and category, the study continues with a comparison of both non-normalcy and normality aspects. Understanding variation, outliers, and right skewness is vital for it. Approximately 1.0, 0.9, and 0.8 were the outliers for the status grouping for the normal, costly, and affordable groups, respectively.
+
+Chinese and Mediterranean categories exhibit skewness with constant ratios, suggesting less price unpredictability, whereas American and Mexican categories have distributions that are closer to symmetry. The Mexican and Japanese categories, which displayed expensive locales, included a lot of outliers. Because ratio distributions are skewed across various cuisines and statuses, these patterns demonstrate non-normality. 
+Therefore, both status and category show normality where they approach symmetry, whereas in the inexpensive category, Chinese and Mediterranean indicate non-normality due to lack of symmetry and skewness.
+
+\vspace{10pt}
+
+## SECTION 04: GETTING INSIGHTS ABOUT THE POSSIBLE PREDICTORS
+\vspace{3pt}
+
+(4)(a) **(5 points)** Now we want to focus on the most common categories. Find the first 7 Categories in terms of the number of restaurants included to those. Run a summary() and histograms to identify and compare them. Create boxplots of TT_Price by these 7 categories. To do this, you may want to identify those and then you can index the observations to get a working subset with only the observations of these categories. Also run boxplots for both TT_Price and Distance by Common Category.
+
+\vspace{4pt}
+
+```{r top_07_categories, message=FALSE, echo=FALSE, fig.width=10, fig.height=8, warning=FALSE}
+category_counts <- sort(table(observations$Category), decreasing = TRUE)
+top_7_categories <- names(category_counts)[1:7]
+
+top_categories_data <- observations[observations$Category %in% top_7_categories, ]
+normal_ratio <- observations$Ratio[observations$Status == "Normal"]
+iqr_normal <- IQR(normal_ratio)
+iqr_normal
+
+summary(top_categories_data)
+
+category_colors <- c("steelblue", "coral3", "darkolivegreen3", "mediumpurple3", 
+                     "tan2", "firebrick3", "lightseagreen")
+
+par(mfrow = c(3, 3), mar = c(4, 4, 2, 1))  
+for (i in 1:7) {
+  category <- top_7_categories[i]
+  hist(top_categories_data$TT_Price[top_categories_data$Category == category], 
+       main = paste("Total Price for", category), 
+       xlab = "Total Price", 
+       col = category_colors[i], 
+       border = "black")
+}
+
+par(mfrow = c(1, 2), mar = c(8, 5, 4, 2) + 0.1)  
+
+boxplot(TT_Price ~ Category, data = top_categories_data,
+        main = "Total Price by Category",
+        xlab = "", ylab = "Total Price",
+        col = category_colors, 
+        las = 2,  
+        cex.axis = 0.8)  #
+
+boxplot(Distance ~ Category, data = top_categories_data,
+        main = "Distance by Category",
+        xlab = "", ylab = "Distance",
+        col = category_colors, 
+        las = 2,  
+        cex.axis = 0.8) 
+
+par(mfrow = c(1, 1))
+```
+\vspace{4pt}
+
+***Essay Question **(5 points)** Do you believe that these categories represent prices and distances of all restaurants well, or are there biases on their values?***
+
+I do not believe that these categories represent prices and distances of all restaurants well, as there are biases in their values. The seven most frequent categories analyzed—American, Mexican, Italian, Japanese, Thai, Chinese, and Mediterranean—showed a foundational overview of restaurant prices for the common ones. 
+Price distribution is skewed, with most restaurants in the moderate price range and a few higher outliers initially focusing on mid-range costs. It is possible that this grouping will overlook other categories that provide less costly products or reflect unique price patterns.
+ Additionally, the focus on these popular categories skews the representation, as it may exclude unique pricing and distance characteristics found in less frequent categories, such as Indian or French cuisine. The distance data, mainly within a 5-mile radius, is likely influenced by the proximity to Northwestern’s campus, which might not reflect the broader Chicago restaurant landscape, particularly those farther from the center. This bias results in an incomplete view, as the concentration on common categories fails to capture the full range of prices and distances across all types of restaurants in the area.
+
+
+## SECTION 05: GETTING INSIGHTS REGARDING DIFFERENT GROUPS IN THE DATA
+
+
+
+(5)(a) (2 points) Use *aggregate()* with "observations" to compute the mean values of FoodPrice, Total Price (TT_Price) and Ratio for each combination of Category and Status. Then, using *matrix()*, create matrices of the mean values. 
+
+\vspace{2pt}
+
+```{r observation_mean_values_FP_TTP, message=FALSE, echo=FALSE, fig.width=10, fig.height=8, warning=FALSE}
+
+foodprice_means <- aggregate(FoodPrice ~ Category + Status, data = observations, FUN = mean)
+tt_price_means <- aggregate(TT_Price ~ Category + Status, data = observations, FUN = mean)
+ratio_means <- aggregate(Ratio ~ Category + Status, data = observations, FUN = mean)
+
+foodprice_matrix <- matrix(foodprice_means$FoodPrice, 
+                           ncol = length(unique(foodprice_means$Status)), 
+                           nrow = length(unique(foodprice_means$Category)),
+                           dimnames = list(unique(foodprice_means$Category), unique(foodprice_means$Status)))
+
+tt_price_matrix <- matrix(tt_price_means$TT_Price, 
+                          ncol = length(unique(tt_price_means$Status)), 
+                          nrow = length(unique(tt_price_means$Category)),
+                          dimnames = list(unique(tt_price_means$Category), unique(tt_price_means$Status)))
+
+ratio_matrix <- matrix(ratio_means$Ratio, 
+                       ncol = length(unique(ratio_means$Status)), 
+                       nrow = length(unique(ratio_means$Category)),
+                       dimnames = list(unique(ratio_means$Category), unique(ratio_means$Status)))
+
+
+kable(foodprice_matrix, caption = "Mean Food Price by Category and Status", escape = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
+
+kable(tt_price_matrix, caption = "Mean Total Price by Category and Status", escape = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
+
+kable(ratio_matrix, caption = "Mean Ratio by Category and Status", escape = TRUE) %>%
+  kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
+```
+\clearpage
+
+(5)(b) **(4 points)** Present three graphs. Each graph should include three lines, one for each Category. The first should show mean Ratio versus Status; 
+the second, mean Total Price versus Status; the third, mean Food Price versus Status. 
+\vspace{4pt}
+
+```{r interaction_plot, message=FALSE, echo=FALSE, fig.width=10, fig.height=8, warning=FALSE}
+mean_values <- aggregate(cbind(Ratio, TT_Price, FoodPrice) ~ Category + Status, data = observations, FUN = mean)
+category_colors <- c("steelblue", "coral3", "darkolivegreen3", "mediumpurple3", 
+                     "tan2", "firebrick3", "lightseagreen")
+
+# Set up a 1x1 plotting area
+par(mfrow = c(1, 1), mar = c(5, 4, 4, 10) + 0.1)  # Set margins
+
+# Mean Ratio versus Status
+interaction.plot(mean_values$Status, mean_values$Category, mean_values$Ratio, 
+                 col = category_colors, 
+                 lty = 1,  
+                 pch = 19, 
+                 lwd = 2,  # Thicker lines for the plot itself
+                 main = "Mean Ratio vs Status", 
+                 xlab = "Status", 
+                 ylab = "Mean Ratio", 
+                 legend = FALSE) 
+
+# Add a legend for the first plot
+legend("topright", inset = c(-0.3, 0), legend = unique(mean_values$Category), 
+       col = category_colors, lty = 1, lwd = 3,
+       title = "Restaurant Categories", 
+       bty = "n", xpd = TRUE)
+
+# Mean Total Price versus Status
+interaction.plot(mean_values$Status, mean_values$Category, mean_values$TT_Price, 
+                 col = category_colors, 
+                 lty = 1,  
+                 pch = 19, 
+                 lwd = 2,  
+                 main = "Mean Total Price vs Status", 
+                 xlab = "Status", 
+                 ylab = "Mean Total Price", 
+                 legend = FALSE) 
+
+legend("topright", inset = c(-0.3, 0), legend = unique(mean_values$Category), 
+       col = category_colors, lty = 1, lwd = 3,
+       title = "Restaurant Categories", 
+       bty = "n", xpd = TRUE)
+
+# Mean Food Price versus Status
+interaction.plot(mean_values$Status, mean_values$Category, mean_values$FoodPrice, 
+                 col = category_colors, 
+                 lty = 1,  
+                 pch = 19, 
+                 lwd = 2,  # Thicker lines for the plot itself
+                 main = "Mean Food Price vs Status", 
+                 xlab = "Status", 
+                 ylab = "Mean Food Price", 
+                 legend = FALSE)
+
+legend("topright", inset = c(-0.3, 0), legend = unique(mean_values$Category), 
+       col = category_colors, lty = 1, lwd = 3,
+       title = "Restaurant Categories", 
+       bty = "n", xpd = TRUE)
+
+par(mfrow = c(1, 1))
+```
+\vspace{4pt}
+
+
+***Essay Question **(2 points)**:  What questions do these plots raise?  Consider distance and category of restaurant.***
+\vspace{2pt}
+
+A few questions arise during this research that focuses on features like food price, total transportation price, and ratio by category and status, specifically:
+\vspace{1pt}
+
+	1.	Does distance from the Northwestern downtown campus influence restaurant prices?
+	
+\vspace{1pt}
+
+	2.	Are certain restaurant categories more inclined to offer expensive to 
+	inexpensive options based on location?
+	
+\vspace{1pt}
+
+	3.	Do certain restaurant categories maintain similar price levels 
+	overall, regardless of distance, supporting consistent pricing?
+	
+\vspace{1pt}
+
+
+
+***Essay Question **(2 points)**:  What do these displays suggest about eating out expenses?  Also, compare the ratio for each of the different categories, do they give an insight about locations?***
+
+The analysis in Tables 05, 06, and 07, along with the Mean Ratio, Total Price, and Food Price vs. Status, provides important insights into the expenses associated with different restaurant categories and their status. Table 05 illustrates the mean food prices by status for each cuisine. From this, we observe that German and Vietnamese cuisines have higher food prices even in the Normal status, showing that these cuisines carry a premium regardless of the status. Expensive restaurants display even higher average food prices; for instance, German cuisine is priced at $27.03, while Thai in the Inexpensive category has a minimum of $6.35. Given the impact of food prices alone, this implies that German and Japanese cuisines do not necessarily require the classification of "Expensive," as they are already pricy.
+ 
+The overall cost, including transportation, is displayed in Table 06, which also provides insight into how distance may affect the price of food. Peruvian restaurants have the highest cost, at $39.14, mainly because of their distance from the institution. For affordable meals, though, there’s a lot of variation: Thai spots are the cheapest at $11.54, while some Peruvian and Chinese places can go up to $25.55. As inexpensive restaurants are far from Northwestern Downtown Campus, the transportation cost component is very important, contributing significantly to the total cost.
+ 
+Table 07 and the Ratio vs. Status graph provide insights into how much of the total price is driven by food cost versus transportation. Higher ratios, like Spanish at 0.75, suggest that these restaurants are close to Northwestern University's downtown Chicago campus. In contrast, lower ratios at more affordable spots, like Peruvian at 0.34, indicate that these places are farther from campus, which increases transportation costs. The Ratio vs. Status graph highlights this pattern, showing how distance can impact dining costs, especially for budget-friendly choices. This pattern reinforces the idea that distance is a big factor in affordable dining, providing useful insights into how location can significantly affect the overall cost.
+
+
+## Section 06: CONCLUSION FROM THE EXPLORATORY DATA ANALYSIS
+
+***Essay Question  **(5 points)**	Based solely on these data, what are plausible statistical reasons that explain the expenditure of Chicagoans who reside in downtown on restaurant eating?***
+
+The data clearly shows several factors that affect downtown Chicago residents' dining expenses, particularly for those who live close to Northwestern's campus. The type of cuisine is a crucial factor as some cuisines are always more expensive than others. For example, Table 05 shows that even when categorized as "Normal," German and Vietnamese restaurants typically charge higher prices. This indicates that these cuisines come with a natural price premium, so residents dining at these establishments pay extra, regardless of other factors. This price premium suggests that the choice of cuisine alone can elevate costs, particularly for those who favor distinctive, higher-cost dining options.
+
+Transportation costs are another significant component. Table 06 reveals that as the distance from Northwestern’s downtown campus increases, so does the total cost, especially for restaurants located farther away. For instance, Thai restaurants, which are usually closer, tend to be more reasonably priced since less money is spent on transportation, whereas Peruvian eateries, which are usually located farther from the university, display some of the highest total expenses.
+This means that people who live far away from Northwestern will most likely spend more time commuting, making them less inclined to dine at places farther away. Finally, Table 07 and the Ratio vs. Status graphs demonstrate how the restaurants' proximity to Northwestern's campus influences the food-to-transportation cost ratio. For example, cheaper and more convenient transportation lowers expenses for local establishments such as Spanish restaurants, which have a high food-to-total-cost ratio (about 0.75). On the other hand, areas further away, such as Peruvian destinations, incur more transportation costs, increasing the overall cost.
+
+Residents of Chicago, particularly those who live closer to Northwestern’s downtown campus, prefer to eat nearby to keep costs low, ensuring that the majority of the bill is spent on the meal itself. Overall, we can see that downtown Chicago residents’ dining habits are influenced by the following factors: distance, cost, and preference of cuisine.
+
+\clearpage
+***Essay Question **(15 points)** Summarize your findings in a half a page paragraph***
+\vspace{1.4pt}
+
+Looking at the restaurant prices in Chicago, we can see some interesting trends, especially for people living near Northwestern’s downtown campus. Table 05 shows that some cuisines, like German and Vietnamese, come with a noticeable price jump, even in the “Normal” range. For example, German restaurants charge around $27 per meal, putting them on the expensive side, right up there with Vietnamese restaurants. Popular choices, such as American, Mexican, and Italian, are generally less expensive, whereas less common options, such as Peruvian and Brazilian, are more expensive.  This pattern tells us that people who go for these unique, more expensive cuisines, like German or Vietnamese, are likely to end up spending more based just on their preferences.
+
+Travel costs add another layer here, as shown in Table 06. We see a clear trend where the total dining cost rises with distance from Northwestern, with travel adding roughly $3.50 per mile. Thai restaurants, which are often closer to campus, show a lower average total of $11.54, while Peruvian spots, typically farther out, can hit total costs up to $39.14. Histograms of these travel costs show a right skew, indicating that diners closer to campus generally pay less for travel. The scatterplot matrix backs this up, showing a positive link between distance and dining expenses, suggesting that folks may prefer closer spots to avoid extra travel costs.
+
+Finally, Table 07 and the Ratio vs. Status graphs highlight how location affects the split between food and travel costs. For example, Spanish places have a high food-to-total cost ratio, around 0.75, which suggests that lower travel expenses mean more of the bill goes toward the actual meal.
+Meanwhile, spots farther out, like Peruvian places with a ratio near 0.34, show that travel costs are eating up a bigger part of the total. Boxplots, histograms, and Q-Q plots point out that distant spots have more cost variability and right-skewed distributions, showing the heavier impact of transportation. Overall, it appears that downtown Chicago residents' dining preferences are influenced by cuisine, travel costs, and distance. Those who live closer to Northwestern may pick nearby restaurants to make the most of their meal budget, but those who choose premium or farther restaurants must balance taste with their travel expenses.
+
+
+
+\clearpage
+## SECTION 07: APPENDIX
+\vspace{20pt}
+```{r vizforthenewcolumns, echo=FALSE, fig.width=6, fig.height=6}
+par(mfrow = c(2, 2)) 
+
+status_counts <- table(observations$Status)  
+#1. Barplot 
+barplot_heights <- barplot(status_counts, 
+                           col = c("skyblue", "goldenrod1", "mediumpurple1"), 
+                           main = "Restaurant Status Distribution",
+                           cex.main = 0.93,
+                           xlab = "Resturant Status", 
+                           ylab = "Count", 
+                           ylim = c(0, max(status_counts) + 100),  
+                           border = "black") 
+
+text(barplot_heights, status_counts + 50, labels = status_counts, pos = 2.9, cex = 0.7, col = "black", font = 2)
+
+# 2. Scatter Plot
+plot(observations$TT_Price, observations$FoodPrice, 
+     main = "Food Price vs Total Price", 
+     cex.main = 0.8,
+     xlab = "Total Price of a Meal", 
+     ylab = "Food Price", 
+     pch = 16,  
+     col = "deepskyblue4")
+
+# linear regression line
+abline(lm(FoodPrice ~ TT_Price, data = observations), col = "red", lwd = 2)
+
+# 3. Histogram of FoodPrice 
+hist_values <- hist(observations$FoodPrice, 
+                    breaks = 10, 
+                    plot = FALSE) 
+
+hist(observations$FoodPrice, 
+     breaks = 10, 
+     col = "lightcoral",  
+     border = "midnightblue",  
+     main = "Distribution of Food Price",
+     cex.main = 0.8,
+     xlab = "Food Price", 
+     ylab = "Frequency", 
+     las = 1,  
+     ylim = c(0, max(hist_values$counts) + 100))  
+
+text(hist_values$mids, hist_values$counts + 30, labels = hist_values$counts, cex = 0.7, col = "black", font = 2)
+
+# 4. Scatter Plot 
+plot(observations$Distance, observations$Ratio, 
+     main = "Food Price to Total Cost Ratio vs Distance", 
+     cex.main = 0.8,
+     xlab = "Distance", 
+     ylab = "Ratio", 
+     pch = 16, 
+     col = "darkorange3",
+     cex = 1.2)
+
+# Reset the plotting layout to default
+par(mfrow = c(1, 1))  # Reset to 1x1 layout for any future plots
+```
+
+
+
+
+
